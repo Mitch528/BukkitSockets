@@ -5,19 +5,16 @@ import java.util.EventObject;
 import com.mitch528.sockets.Sockets.SocketHandler;
 
 @SuppressWarnings("serial")
-public class SocketConnectedEvent extends EventObject
+public class SocketHandlerReadyEvent extends EventObject
 {
-	
-	private int id;
 	
 	private SocketHandler handler;
 	
-	public SocketConnectedEvent(Object source, SocketHandler handler, int id)
+	public SocketHandlerReadyEvent(Object source, SocketHandler handler)
 	{
 		
 		super(source);
 		
-		this.id = id;
 		this.handler = handler;
 		
 	}
@@ -25,11 +22,6 @@ public class SocketConnectedEvent extends EventObject
 	public SocketHandler getHandler()
 	{
 		return handler;
-	}
-	
-	public int getID()
-	{
-		return id;
 	}
 	
 }

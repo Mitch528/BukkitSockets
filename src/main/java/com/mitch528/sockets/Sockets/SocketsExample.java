@@ -6,18 +6,20 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import com.mitch528.sockets.events.MessageReceivedEvent;
 import com.mitch528.sockets.events.MessageReceivedEventListener;
-import com.mitch528.sockets.events.SocketAcceptedEvent;
-import com.mitch528.sockets.events.SocketAcceptedEventListener;
+import com.mitch528.sockets.events.ServerSocketAcceptedEvent;
+import com.mitch528.sockets.events.ServerSocketAcceptedEventListener;
+import com.mitch528.sockets.events.ServerSocketStartedEvent;
 import com.mitch528.sockets.events.SocketConnectedEvent;
 import com.mitch528.sockets.events.SocketConnectedEventListener;
 import com.mitch528.sockets.events.SocketDisconnectedEvent;
 import com.mitch528.sockets.events.SocketDisconnectedEventListener;
+import com.mitch528.sockets.events.ServerSocketStartedEventListener;
 
 public class SocketsExample extends JavaPlugin
 {
 	
-	private Server server = new Server(9876);
-	private Client client = new Client("localhost", 9876);
+	private final Server server = new Server(9876);
+	private final Client client = new Client("127.0.0.1", 9876);
 	
 	private Logger logger = Logger.getLogger("Minecraft");
 	
@@ -34,40 +36,41 @@ public class SocketsExample extends JavaPlugin
 	{
 		// TODO Auto-generated method stub
 		
-		server.getAccepted().addSocketAcceptedEventListener(new SocketAcceptedEventListener()
+		server.getSocketAccepted().addServerSocketAcceptedEventListener(new ServerSocketAcceptedEventListener()
 		{
 			
-			public void socketAccepted(SocketAcceptedEvent evt) //this is called when a client has been accepted
+			@Override
+			public void socketAccepted(ServerSocketAcceptedEvent evt)
 			{
 				
+				logger.info("Server - Client has connected (ID: " + evt.getHandler().getId() + ")");
+				
 				final SocketHandler handler = evt.getHandler();
-				
-				logger.info("SOCKET ACCEPTED! Host: " + handler.getHostName());
-				
-				handler.getDisconnected().addSocketDisconnectedEventListener(new SocketDisconnectedEventListener()
-				{
-					
-					public void socketDisconnected(SocketDisconnectedEvent sdEvt)
-					{
-						
-						logger.info("Client disconnected from server! ID: " + sdEvt.getID());
-						
-					}
-					
-				});
 				
 				handler.getMessage().addMessageReceivedEventListener(new MessageReceivedEventListener()
 				{
 					
-					public void messageReceived(MessageReceivedEvent mrEvt) //this is called when a message has been received from the client
+					@Override
+					public void messageReceived(MessageReceivedEvent evt)
 					{
 						
-						String message = mrEvt.getMessage();
+						logger.info("Server - Received message from client - " + evt.getMessage());
+						logger.info("Server - Sending reply to client");
 						
-						logger.info("Message received from client: " + message + " (ID: " + mrEvt.getID() + ")");
-						logger.info("Replying to client");
+						handler.SendMessage("Goodbye World!");
 						
-						handler.SendMessage("Goodbye world!");
+					}
+					
+				});
+				
+				handler.getDisconnected().addSocketDisconnectedEventListener(new SocketDisconnectedEventListener()
+				{
+
+					@Override
+					public void socketDisconnected(SocketDisconnectedEvent evt)
+					{
+						
+						logger.info("Server - Client " + evt.getID() + " disconnected");
 						
 					}
 					
@@ -77,76 +80,62 @@ public class SocketsExample extends JavaPlugin
 			
 		});
 		
-		client.getConnected().addSocketConnectedEventListener(new SocketConnectedEventListener()
+		server.getServerSocketStarted().addServerSocketStartedEventListener(new ServerSocketStartedEventListener()
 		{
 			
-			public void socketConnected(SocketConnectedEvent evt) //this is called when the client has connected to the server
+			@Override
+			public void serverSocketStarted(ServerSocketStartedEvent evt)
+			{
+				client.Connect();
+			}
+			
+		});
+		
+		client.getHandler().getConnected().addSocketConnectedEventListener(new SocketConnectedEventListener()
+		{
+			
+			@Override
+			public void socketConnected(SocketConnectedEvent evt)
 			{
 				
-				logger.info("Connected to server!");
-				logger.info("Sending message to server");
+				logger.info("Client - Connected to server!");
+				logger.info("Client - Sending message to server.");
 				
-				client.SendMessage("Hello World");
-				
-				client.getHandler().getDisconnected().addSocketDisconnectedEventListener(new SocketDisconnectedEventListener()
-				{
-					
-					public void socketDisconnected(SocketDisconnectedEvent evt) //this is called when the client has disconnected from the server
-					{
-						
-						logger.info("Disconnected from server");
-						
-					}
-					
-				});
-				
-				client.getHandler().getMessage().addMessageReceivedEventListener(new MessageReceivedEventListener()
-				{
-					
-					public void messageReceived(MessageReceivedEvent evt) //called when a message has been received from the server
-					{
-						
-						String message = evt.getMessage();
-						
-						logger.info("Message received from server: " + message);
-						
-					}
-					
-				});
+				client.SendMessage("Hello World!");
 				
 			}
 			
 		});
 		
-		new Thread(new Runnable()
+		client.getHandler().getMessage().addMessageReceivedEventListener(new MessageReceivedEventListener()
 		{
 			
-			public void run()
+			@Override
+			public void messageReceived(MessageReceivedEvent evt)
 			{
-				// TODO Auto-generated method stub
 				
-				try
-				{
-					
-					server.start();
-					
-					Thread.sleep(5000);
-					
-					client.Connect();
-					
-					Thread.sleep(10000);
-					
-					client.Disconnect();
-					
-				}
-				catch (Exception e)
-				{
-					
-				}
+				logger.info("Client - I got the following message: " + evt.getMessage());
+			
+				client.Disconnect();
 				
 			}
 			
-		}).start();
+		});
+		
+		client.getHandler().getDisconnected().addSocketDisconnectedEventListener(new SocketDisconnectedEventListener()
+		{
+			
+			@Override
+			public void socketDisconnected(SocketDisconnectedEvent evt)
+			{
+				
+				logger.info("Client - Disconnected");
+				
+			}
+			
+		});
+		
+		server.start();
 		
 	}
 }

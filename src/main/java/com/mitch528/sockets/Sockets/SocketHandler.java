@@ -7,10 +7,14 @@ import java.nio.ByteBuffer;
 
 import com.mitch528.sockets.events.MessageReceived;
 import com.mitch528.sockets.events.MessageReceivedEvent;
+import com.mitch528.sockets.events.SocketConnected;
+import com.mitch528.sockets.events.SocketConnectedEvent;
 import com.mitch528.sockets.events.SocketDisconnected;
 import com.mitch528.sockets.events.SocketDisconnectedEvent;
+import com.mitch528.sockets.events.SocketHandlerReady;
+import com.mitch528.sockets.events.SocketHandlerReadyEvent;
 
-public class SocketHandler implements Runnable
+public class SocketHandler extends Thread
 {
 	
 	private Socket sock;
@@ -23,12 +27,22 @@ public class SocketHandler implements Runnable
 	private InputStream in;
 	private OutputStream out;
 	
+	private SocketConnected connected;
 	private SocketDisconnected disconnected;
 	private MessageReceived message;
+	private SocketHandlerReady ready;
 	
 	private String hostName;
 	
 	private int id;
+	
+	public SocketHandler()
+	{
+		this.disconnected = new SocketDisconnected();
+		this.message = new MessageReceived();
+		this.connected = new SocketConnected();
+		this.ready = new SocketHandlerReady();
+	}
 	
 	public SocketHandler(Socket sock, int id)
 	{
@@ -36,25 +50,44 @@ public class SocketHandler implements Runnable
 		this.sock = sock;
 		this.id = id;
 		
+		this.connected = new SocketConnected();
 		this.disconnected = new SocketDisconnected();
 		this.message = new MessageReceived();
-		
-		Thread sockThread = new Thread(this);
-		
-		sockThread.start();
+		this.ready = new SocketHandlerReady();
 		
 	}
 	
 	private void HandleConnection()
 	{
 		
+		if (sock == null)
+		{
+			
+			Disconnect();
+			
+			return;
+			
+		}
+		
 		try
 		{
 			
-			this.hostName = sock.getInetAddress().getHostName();
+			this.hostName = sock.getInetAddress().getCanonicalHostName();
 			
 			in = sock.getInputStream();
 			out = sock.getOutputStream();
+			
+			if (in == null || out == null)
+			{
+				
+				Disconnect();
+				
+				return;
+				
+			}
+			
+			ready.executeEvent(new SocketHandlerReadyEvent(this, this));
+			connected.executeEvent(new SocketConnectedEvent(this, this, id));
 			
 			startReading();
 			
@@ -68,14 +101,21 @@ public class SocketHandler implements Runnable
 	
 	public void SendMessage(String message)
 	{
-		writeToStream(message);
+		if (sock.isConnected() && !sock.isClosed())
+			writeToStream(message);
 	}
 	
 	private void startReading()
 	{
 		
 		if (!sock.isConnected() || sock.isClosed())
+		{
+			
+			Disconnect();
+			
 			return;
+			
+		}
 		
 		buffer = new byte[buffer.length - bytesReceived];
 		
@@ -91,7 +131,7 @@ public class SocketHandler implements Runnable
 				
 			}
 			
-			bytesReceived = in.read(buffer);
+			bytesReceived += in.read(buffer);
 			
 			if (messageSize == -1) //still reading size of data
 			{
@@ -155,7 +195,7 @@ public class SocketHandler implements Runnable
 	private void writeToStream(String message)
 	{
 		
-		if (!sock.isConnected() || sock.isClosed())
+		if (!sock.isConnected() || sock.isClosed() || out == null)
 			return;
 		
 		byte[] sizeinfo = new byte[4];
@@ -186,6 +226,8 @@ public class SocketHandler implements Runnable
 		try
 		{
 			
+			System.out.println("Client disconnecting");
+			
 			sock.shutdownInput();
 			sock.shutdownOutput();
 			
@@ -201,9 +243,24 @@ public class SocketHandler implements Runnable
 		
 	}
 	
+	public void setSocket(Socket sock)
+	{
+		this.sock = sock;
+	}
+	
+	public void setID(int id)
+	{
+		this.id = id;
+	}
+	
 	public String getHostName()
 	{
 		return hostName;
+	}
+	
+	public SocketConnected getConnected()
+	{
+		return connected;
 	}
 	
 	public SocketDisconnected getDisconnected()
@@ -221,9 +278,18 @@ public class SocketHandler implements Runnable
 		return sock;
 	}
 	
-	public void run()
+	public SocketHandlerReady getReady()
 	{
-		HandleConnection();
+		return ready;
 	}
 	
+	public void run()
+	{
+		
+		if (this.sock == null)
+			return;
+		
+		HandleConnection();
+		
+	}
 }

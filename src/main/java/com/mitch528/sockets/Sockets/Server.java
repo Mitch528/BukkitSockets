@@ -6,8 +6,12 @@ import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.mitch528.sockets.events.SocketAccepted;
-import com.mitch528.sockets.events.SocketAcceptedEvent;
+import com.mitch528.sockets.events.ServerSocketAccepted;
+import com.mitch528.sockets.events.ServerSocketAcceptedEvent;
+import com.mitch528.sockets.events.ServerSocketStarted;
+import com.mitch528.sockets.events.ServerSocketStartedEvent;
+import com.mitch528.sockets.events.SocketHandlerReadyEvent;
+import com.mitch528.sockets.events.SocketHandlerReadyEventListener;
 
 public class Server extends Thread
 {
@@ -18,16 +22,18 @@ public class Server extends Thread
 	
 	private List<SocketHandler> handlers = new ArrayList<SocketHandler>();
 	
-	private SocketAccepted accepted;
-	
 	private ServerSocket server;
+	
+	private ServerSocketStarted started;
+	private ServerSocketAccepted accepted;
 	
 	public Server(int port)
 	{
 		
-		this.accepted = new SocketAccepted();
-		
 		this.port = port;
+		
+		this.started = new ServerSocketStarted();
+		this.accepted = new ServerSocketAccepted();
 		
 	}
 	
@@ -39,16 +45,29 @@ public class Server extends Thread
 			
 			server = new ServerSocket(port);
 			
+			started.executeEvent(new ServerSocketStartedEvent(this));
+			
 			while (true)
 			{
 				
 				Socket sock = server.accept();
 				
-				SocketHandler handler = new SocketHandler(sock, ++counter);
+				final SocketHandler handler = new SocketHandler(sock, ++counter);
+				
+				handler.getReady().addSocketHandlerReadyEventListener(new SocketHandlerReadyEventListener()
+				{
+					
+					@Override
+					public void socketHandlerReady(SocketHandlerReadyEvent evt)
+					{
+						accepted.executeEvent(new ServerSocketAcceptedEvent(this, handler));
+					}
+					
+				});
+				
+				handler.start();
 				
 				handlers.add(handler);
-				
-				accepted.executeEvent(new SocketAcceptedEvent(this, handler));
 				
 			}
 			
@@ -95,7 +114,12 @@ public class Server extends Thread
 		return handlers.get(index);
 	}
 	
-	public SocketAccepted getAccepted()
+	public ServerSocketStarted getServerSocketStarted()
+	{
+		return started;
+	}
+	
+	public ServerSocketAccepted getSocketAccepted()
 	{
 		return accepted;
 	}
